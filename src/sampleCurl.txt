@@ -1,0 +1,8 @@
+// register device
+curl -vH "Content-Type: application/json" http://localhost:5000/api/register -X POST -d '{"device_number":"990000862401821"}'
+
+// propose a label
+curl -vH "Content-Type: application/json" http://localhost:5000/api/pattern/5/label -X POST -d '{"device_number":"990000862401821", "label":"hansa"}'
+
+// returns a base64 encoded image and labels for the training set that it belongs to to the user (only if the image as been labelled less than 3 times before)
+curl -v http://localhost:5000/api/pattern/unlabelled
