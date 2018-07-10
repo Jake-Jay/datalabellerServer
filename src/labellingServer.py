@@ -22,23 +22,34 @@ def index():
     return result
 
 # ---- User recieves an unlabelled image with associated possible labels.
-@app.route('/api/pattern/unlabelled', methods=['GET'])
+@app.route('/api/pattern/unlabelled/', methods=['GET'])
 def unlabelled():
+    deviceID = request.args.get('deviceID')
     with connect() as conn:
         stmt = '''
-            WITH counts AS (
-                SELECT pattern_id as p_id, count(1) as occurrences
-                FROM phone_pattern_label
-                GROUP BY pattern_id
+            WITH new_patterns AS (
+                WITH counts AS (
+                    SELECT pattern_id as p_id, count(1) as occurrences
+                    FROM phone_pattern_label
+                    GROUP BY pattern_id
+                )
+                SELECT *
+                FROM pattern AS pp
+                LEFT OUTER JOIN counts as cc
+                ON pp.pattern_id = cc.p_id
+                WHERE (cc.occurrences < 3 or cc.occurrences IS NULL)
+                AND pp.pattern_id NOT IN (
+                    SELECT ppl.pattern_id
+                    FROM phones as pp1
+                    INNER JOIN phone_pattern_label as ppl
+                    ON pp1.phone_id = ppl.phone_id
+                    WHERE device_number = '{}'
+                )
             )
-            SELECT *
-            FROM pattern AS pp
-            LEFT OUTER JOIN counts as cc
-            ON pp.pattern_id = cc.p_id
-            WHERE cc.occurrences < 3 or cc.occurrences IS NULL
-			OFFSET floor(random()* (SELECT count(*)FROM pattern))
-			LIMIT 1;
-            '''
+            SELECT * FROM new_patterns
+            OFFSET floor(random()* (SELECT count(*) FROM new_patterns))
+            LIMIT 1;
+            '''.format(deviceID)
         pattern_result =  query(conn, stmt)
         if pattern_result == []:
             return( jsonify({'error':'pattern not found'}))
@@ -75,6 +86,26 @@ def label(pattern_id):
         if ( recordExists(conn, 'labels', 'label', label) == False ):
             return make_response('Record is  not found \n', 400 )
 
+        # ---- Find the number of times the user has labelled the image
+        stmt = '''
+            WITH userPhone as(
+	            SELECT phone_id 
+	            FROM phones
+	            WHERE device_number = '{}'
+            )
+            SELECT count(*)
+            FROM phone_pattern_label as ppl, userPhone
+            WHERE ppl.phone_id = userPhone.phone_id
+            AND ppl.pattern_id = {};
+            '''.format(dev_num, pattern_id)
+
+        print(stmt)
+
+        labels_by_user =  query(conn, stmt)
+        print('The user has labelled the pattern {} times'.format(labels_by_user[0]['count']))
+        if int( labels_by_user[0]['count'] ) > 0:
+            return make_response('Doing nothing in the insert but dont break!', 200)
+
         stmt = '''
             INSERT INTO phone_pattern_label (pattern_id, phone_id, label_id)
             SELECT pp.pattern_id, ph.phone_id, ll.label_id
@@ -86,7 +117,7 @@ def label(pattern_id):
             ON ll.label = \'{}\'
             '''.format(pattern_id, dev_num, label)
         insert(conn, stmt)
-    return make_response('', 200)
+    return make_response('Insertion Complete', 200)
 
 
 # ---- Function to add phones into the phone table
@@ -97,7 +128,7 @@ def register():
     if( validateDevice(imei) ):
         with connect() as conn:
             if( recordExists(conn, 'phones', 'device_number', imei)):
-                return make_response('Phone is already registered \n', 400)
+                return make_response('Phone is already registered \n', 200)
             stmt = '''
                 INSERT INTO phones(device_number)
                 VALUES({})
