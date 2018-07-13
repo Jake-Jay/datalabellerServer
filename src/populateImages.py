@@ -24,7 +24,7 @@ except (Exception, psycopg2.DatabaseError) as error:
     print(error)
 
 ''' Find all images in directory '''
-path = '/Users/jakepencharz/Documents/Isazi/Data Labeller/BeerImages/'
+path = '/Users/jakepencharz/Documents/Isazi/DataLabeller/BeerImages/'
 image_list = [f for f in listdir(path) if isfile(join(path, f))]
 print('Number of images in dir: {}'.format(len(image_list)) )
 
